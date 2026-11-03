@@ -1,0 +1,40 @@
+# Audiobookshelf plus the LAABS Companion.
+#
+# The Companion must see each library folder at the SAME path Audiobookshelf
+# reports for it, and it needs write access there. The simplest way is to copy
+# Audiobookshelf's media volume lines exactly, without ":ro".
+
+services:
+  audiobookshelf:
+    image: ghcr.io/advplyr/audiobookshelf:latest
+    ports:
+      - "13378:80"
+    volumes:
+      - ./audiobooks:/audiobooks
+      - ./podcasts:/podcasts
+      - ./config:/config
+      - ./metadata:/metadata
+    environment:
+      - TZ=America/Toronto
+    restart: unless-stopped
+
+  laabs-companion:
+    build: .                     # or: image: <your registry>/laabs-companion:latest
+    # Run as the user that owns your media so sidecars are written with the right owner.
+    user: "1000:1000"
+    volumes:
+      # Same host folders, same container paths as Audiobookshelf, read-write.
+      - ./audiobooks:/audiobooks
+      - ./podcasts:/podcasts
+    environment:
+      - ABS_INTERNAL_URL=http://audiobookshelf:80
+      - LIBRARY_ROOTS=/audiobooks:/podcasts
+      # Optional: only when your reverse proxy forwards /laabs/... without stripping it.
+      # - BASE_PATH=/laabs
+    # Not published: put it behind the same reverse proxy as Audiobookshelf at /laabs.
+    # For a quick test without a proxy, uncomment:
+    # ports:
+    #   - "8787:8787"
+    depends_on:
+      - audiobookshelf
+    restart: unless-stopped
