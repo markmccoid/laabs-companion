@@ -38,6 +38,8 @@ The paths matter. Audiobookshelf reports each item's absolute folder (for exampl
 
 ## Docker (recommended)
 
+For a full walkthrough, see [docs/docker.md](docs/docker.md). It covers Compose layouts, `docker run`, permissions, network shares, testing on a Mac, and troubleshooting.
+
 Copy `docker-compose.example.yml` and give the Companion **exactly the media volume lines Audiobookshelf has**, read-write (no `:ro`):
 
 ```yaml
