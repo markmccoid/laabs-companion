@@ -154,6 +154,7 @@ services:
   laabs-companion:
     build: ./laabs-companion        # path to this repository
     image: laabs-companion:latest
+    pull_policy: build              # built locally; `docker compose pull` skips it
     user: "1000:1000"               # owner of your media files
     volumes:
       # Same host folders, same container paths as Audiobookshelf, read-write.
@@ -204,6 +205,7 @@ services:
   laabs-companion:
     build: .
     image: laabs-companion:latest
+    pull_policy: build              # built locally; `docker compose pull` skips it
     user: "1000:1000"
     volumes:
       - /srv/media/audiobooks:/audiobooks
@@ -231,6 +233,7 @@ services:
   laabs-companion:
     build: .
     image: laabs-companion:latest
+    pull_policy: build              # built locally; `docker compose pull` skips it
     ports:
       - "8787:8787"
     volumes:
