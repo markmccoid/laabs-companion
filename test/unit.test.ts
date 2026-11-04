@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AbsClient } from "../src/abs-client";
 import { atomicWriteFile } from "../src/atomic-write";
 import { loadConfig } from "../src/config";
@@ -164,6 +164,26 @@ describe("atomicWriteFile", () => {
     expect(await fs.readFile(target, "utf8")).toBe("two");
     expect(await fs.readdir(dir)).toEqual([".laabs.bookmarks.u1.json"]);
     await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it("still writes when the filesystem refuses fsync", async () => {
+    const dir = await makeTempDir();
+    const target = path.join(dir, ".laabs.bookmarks.u1.json");
+    const probe = await fs.open(path.join(dir, "probe"), "w");
+    const fileHandleProto = Object.getPrototypeOf(probe) as fs.FileHandle;
+    await probe.close();
+    await fs.rm(path.join(dir, "probe"));
+    const sync = vi
+      .spyOn(fileHandleProto, "sync")
+      .mockRejectedValue(Object.assign(new Error("operation not supported"), { code: "ENOTSUP" }));
+    try {
+      await atomicWriteFile(target, "one");
+      expect(await fs.readFile(target, "utf8")).toBe("one");
+      expect(await fs.readdir(dir)).toEqual([".laabs.bookmarks.u1.json"]);
+    } finally {
+      sync.mockRestore();
+      await fs.rm(dir, { recursive: true, force: true });
+    }
   });
 });
 

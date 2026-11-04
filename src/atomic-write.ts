@@ -4,6 +4,16 @@ import path from "node:path";
 import { isErrnoException } from "./errors";
 
 const RETRYABLE_RENAME_CODES = new Set(["EPERM", "EACCES", "EBUSY"]);
+/** Some shared folders (SMB through a VM file share, some FUSE mounts) refuse fsync on files too. */
+const UNSUPPORTED_SYNC_CODES = new Set(["ENOTSUP", "EOPNOTSUPP", "EINVAL", "ENOSYS"]);
+
+const syncIfSupported = async (handle: fs.FileHandle) => {
+  try {
+    await handle.sync();
+  } catch (error) {
+    if (!isErrnoException(error) || !UNSUPPORTED_SYNC_CODES.has(error.code ?? "")) throw error;
+  }
+};
 
 /** Windows refuses to replace a file another process (an indexer, antivirus) has open; retry briefly. */
 const renameWithRetry = async (from: string, to: string) => {
@@ -31,7 +41,7 @@ export const atomicWriteFile = async (target: string, content: string) => {
   try {
     try {
       await handle.writeFile(content, "utf8");
-      await handle.sync();
+      await syncIfSupported(handle);
     } finally {
       await handle.close();
     }
