@@ -334,6 +334,65 @@ Check the route from outside your network:
 curl https://abs.example.com/laabs/health
 ```
 
+### Example: Caddy on another machine, behind a Cloudflare Tunnel
+
+This is a common home setup:
+
+- **Docker host** (`192.168.1.33`) runs Audiobookshelf, publishing `13378:80`, and the Companion, publishing `8787:8787`.
+- **Caddy** runs on a different machine and proxies to the Docker host's LAN address.
+- **A Cloudflare Tunnel** carries `https://abs.example.com` from the internet to Caddy.
+
+```
+iPhone ──https──▶ Cloudflare ──tunnel──▶ Caddy ──┬─ /laabs/*  ─▶ 192.168.1.33:8787   (Companion)
+                                                  └─ everything ─▶ 192.168.1.33:13378  (Audiobookshelf)
+```
+
+In the Caddyfile, wrap each route in `handle`. Without it, Caddy would send `/laabs/...` to Audiobookshelf like every other path. `handle_path` removes the `/laabs` prefix before forwarding, so the Companion needs no `BASE_PATH`. Add the same route to any other host names you use, such as a name for your home network:
+
+```caddy
+abs.example.com {
+    tls {
+        dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+    }
+    handle_path /laabs/* {
+        reverse_proxy 192.168.1.33:8787
+    }
+    handle {
+        reverse_proxy 192.168.1.33:13378
+    }
+}
+
+http://abs.home.arpa, http://abs {
+    handle_path /laabs/* {
+        reverse_proxy 192.168.1.33:8787
+    }
+    handle {
+        reverse_proxy 192.168.1.33:13378
+    }
+}
+```
+
+Audiobookshelf's websockets keep working, because `reverse_proxy` passes them through.
+
+Reload Caddy with `caddy reload --config /etc/caddy/Caddyfile`. If Caddy runs in Docker, prefix the command with `docker exec <caddy container>`. Then check both names:
+
+```bash
+curl -s https://abs.example.com/laabs/health
+```
+
+```bash
+curl -s http://abs.home.arpa/laabs/health
+```
+
+Both should return `{"service":"laabs-companion",...}`.
+
+**If the HTTPS check returns Audiobookshelf's page or a 404:** the tunnel is probably sending traffic straight to Audiobookshelf instead of to Caddy. In the Cloudflare dashboard, open **Zero Trust → Networks → Tunnels**, choose your tunnel, and open **Public Hostname**. Look at where the `abs.example.com` entry points.
+
+- **It points at Caddy:** the Caddyfile above is all you need. Check that Caddy reloaded.
+- **It points at Audiobookshelf directly** (for example `http://192.168.1.33:13378`): either point it at Caddy, or add a second public hostname entry for `abs.example.com` with **Path** `laabs/*` and **Service** `http://192.168.1.33:8787`. The tunnel doesn't strip the prefix, so in the second case also set `BASE_PATH=/laabs` on the Companion.
+
+Once the route works, clear the Companion URL in LAABS Audio. The app then finds the Companion at `https://abs.example.com/laabs`, at home and away, and real iPhones accept it because it's HTTPS. Nothing needs to reach port `8787` except Caddy, so you can stop other machines on your network from reaching it with a firewall rule if you like. Every request still needs a valid Audiobookshelf token either way.
+
 ## Connect LAABS Audio
 
 Open **Settings → LAABS Companion** in LAABS Audio.
